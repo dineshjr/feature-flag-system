@@ -1,25 +1,28 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuth } from '../context/AuthContext'
-
-const MOCK_EMAIL = 'superadmin@byepo.com'
-const MOCK_PASSWORD = 'superadmin123'
+import api from '../api/axiosInstance'
 
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
 
-    if (form.email === MOCK_EMAIL && form.password === MOCK_PASSWORD) {
-      login('mock-token-superadmin', { email: MOCK_EMAIL, role: 'super_admin' })
+    try {
+      const res = await api.post('/login', form)
+      login(res.data.token, { email: res.data.email, role: res.data.role })
       navigate('/dashboard')
-    } else {
-      setError('Invalid credentials')
+    } catch (err) {
+      setError(err.response?.data?.message || 'Login failed')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -52,7 +55,9 @@ export default function Login() {
             required
           />
 
-          <button type="submit" style={styles.button}>Login</button>
+          <button type="submit" style={styles.button} disabled={loading}>
+            {loading ? 'Logging in...' : 'Login'}
+          </button>
         </form>
       </div>
     </div>
@@ -97,5 +102,6 @@ const styles = {
     fontSize: '14px',
     cursor: 'pointer',
     marginTop: '4px',
+    opacity: 1,
   },
 }

@@ -1,27 +1,40 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuth } from '../context/AuthContext'
-
-const MOCK_FLAGS = [
-  { _id: '1', key: 'dark_mode', enabled: true },
-  { _id: '2', key: 'beta_dashboard', enabled: false },
-  { _id: '3', key: 'new_checkout', enabled: true },
-]
+import api from '../api/axiosInstance'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const [flags, setFlags] = useState(MOCK_FLAGS)
+  const [flags, setFlags] = useState([])
   const [newKey, setNewKey] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+
+  useEffect(() => {
+    fetchFlags()
+  }, [])
+
+  const fetchFlags = async () => {
+    setLoading(true)
+    try {
+      const res = await api.get('/flags')
+      setFlags(res.data)
+    } catch (err) {
+      setError('Failed to load feature flags')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogout = () => {
     logout()
     navigate('/')
   }
 
-  const handleCreate = (e) => {
+  const handleCreate = async (e) => {
     e.preventDefault()
     setError('')
     setSuccess('')
@@ -29,21 +42,35 @@ export default function Dashboard() {
     const trimmed = newKey.trim().toLowerCase()
     if (!trimmed) return setError('Feature key is required')
 
-    const exists = flags.find((f) => f.key === trimmed)
-    if (exists) return setError('Feature key already exists')
-
-    const newFlag = { _id: String(Date.now()), key: trimmed, enabled: false }
-    setFlags([newFlag, ...flags])
-    setNewKey('')
-    setSuccess(`"${trimmed}" created`)
+    setCreating(true)
+    try {
+      const res = await api.post('/flags', { key: trimmed, enabled: false })
+      setFlags([res.data, ...flags])
+      setNewKey('')
+      setSuccess(`"${trimmed}" created`)
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to create flag')
+    } finally {
+      setCreating(false)
+    }
   }
 
-  const handleToggle = (id) => {
-    setFlags(flags.map((f) => f._id === id ? { ...f, enabled: !f.enabled } : f))
+  const handleToggle = async (flag) => {
+    try {
+      const res = await api.put(`/flags/${flag._id}`, { enabled: !flag.enabled })
+      setFlags(flags.map((f) => f._id === flag._id ? res.data : f))
+    } catch (err) {
+      setError('Failed to update flag')
+    }
   }
 
-  const handleDelete = (id) => {
-    setFlags(flags.filter((f) => f._id !== id))
+  const handleDelete = async (id) => {
+    try {
+      await api.delete(`/flags/${id}`)
+      setFlags(flags.filter((f) => f._id !== id))
+    } catch (err) {
+      setError('Failed to delete flag')
+    }
   }
 
   return (
@@ -74,7 +101,9 @@ export default function Dashboard() {
               value={newKey}
               onChange={(e) => setNewKey(e.target.value)}
             />
-            <button type="submit" style={styles.createBtn}>Create</button>
+            <button type="submit" style={styles.createBtn} disabled={creating}>
+              {creating ? 'Creating...' : 'Create'}
+            </button>
           </form>
           {error && <p style={styles.error}>{error}</p>}
           {success && <p style={styles.success}>{success}</p>}
@@ -83,7 +112,10 @@ export default function Dashboard() {
         {/* Flags List */}
         <div style={styles.card}>
           <h3 style={styles.cardTitle}>Feature Flags ({flags.length})</h3>
-          {flags.length === 0 ? (
+
+          {loading ? (
+            <p style={styles.empty}>Loading...</p>
+          ) : flags.length === 0 ? (
             <p style={styles.empty}>No feature flags yet.</p>
           ) : (
             <table style={styles.table}>
@@ -108,7 +140,7 @@ export default function Dashboard() {
                     </td>
                     <td style={styles.td}>
                       <button
-                        onClick={() => handleToggle(flag._id)}
+                        onClick={() => handleToggle(flag)}
                         style={flag.enabled ? styles.disableBtn : styles.enableBtn}
                       >
                         {flag.enabled ? 'Disable' : 'Enable'}

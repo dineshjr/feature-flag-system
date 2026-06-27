@@ -1,27 +1,41 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuth } from '../context/AuthContext'
-
-const MOCK_ORGS = [
-  { _id: '1', name: 'Acme Corp', createdAt: '2024-01-10T00:00:00.000Z' },
-  { _id: '2', name: 'Stark Industries', createdAt: '2024-02-14T00:00:00.000Z' },
-  { _id: '3', name: 'Wayne Enterprises', createdAt: '2024-03-05T00:00:00.000Z' },
-]
+import api from '../api/axiosInstance'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const [orgs, setOrgs] = useState(MOCK_ORGS)
+  const [orgs, setOrgs] = useState([])
   const [orgName, setOrgName] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+
+  // Fetch orgs on mount
+  useEffect(() => {
+    fetchOrgs()
+  }, [])
+
+  const fetchOrgs = async () => {
+    setLoading(true)
+    try {
+      const res = await api.get('/organizations')
+      setOrgs(res.data)
+    } catch (err) {
+      setError('Failed to load organizations')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleLogout = () => {
     logout()
     navigate('/')
   }
 
-  const handleCreateOrg = (e) => {
+  const handleCreateOrg = async (e) => {
     e.preventDefault()
     setError('')
     setSuccess('')
@@ -29,17 +43,17 @@ export default function Dashboard() {
     const trimmed = orgName.trim()
     if (!trimmed) return setError('Organization name is required')
 
-    const exists = orgs.find((o) => o.name.toLowerCase() === trimmed.toLowerCase())
-    if (exists) return setError('Organization already exists')
-
-    const newOrg = {
-      _id: String(Date.now()),
-      name: trimmed,
-      createdAt: new Date().toISOString(),
+    setCreating(true)
+    try {
+      const res = await api.post('/organizations', { name: trimmed })
+      setOrgs([res.data, ...orgs])
+      setOrgName('')
+      setSuccess(`"${trimmed}" created successfully`)
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to create organization')
+    } finally {
+      setCreating(false)
     }
-    setOrgs([newOrg, ...orgs])
-    setOrgName('')
-    setSuccess(`"${trimmed}" created successfully`)
   }
 
   return (
@@ -67,7 +81,9 @@ export default function Dashboard() {
               value={orgName}
               onChange={(e) => setOrgName(e.target.value)}
             />
-            <button type="submit" style={styles.createBtn}>Create</button>
+            <button type="submit" style={styles.createBtn} disabled={creating}>
+              {creating ? 'Creating...' : 'Create'}
+            </button>
           </form>
           {error && <p style={styles.error}>{error}</p>}
           {success && <p style={styles.success}>{success}</p>}
@@ -76,7 +92,10 @@ export default function Dashboard() {
         {/* Org List */}
         <div style={styles.card}>
           <h3 style={styles.cardTitle}>Organizations ({orgs.length})</h3>
-          {orgs.length === 0 ? (
+
+          {loading ? (
+            <p style={styles.empty}>Loading...</p>
+          ) : orgs.length === 0 ? (
             <p style={styles.empty}>No organizations yet.</p>
           ) : (
             <table style={styles.table}>

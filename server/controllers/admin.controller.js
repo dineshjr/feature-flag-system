@@ -1,16 +1,24 @@
 const jwt = require('jsonwebtoken')
-const User = require('../models/User')
-const Organization = require('../models/Organization')
+const User = require('../models/Users')
+const Organization = require('../models/Organizations')
 const FeatureFlag = require('../models/FeatureFlag')
 
 const signup = async (req, res) => {
   const { email, password, orgId } = req.body
+
+  console.log('signup body:', req.body) // ADD THIS
 
   if (!email || !password || !orgId) {
     return res.status(400).json({ message: 'email, password and orgId are required' })
   }
 
   try {
+    const mongoose = require('mongoose')
+    
+    if (!mongoose.Types.ObjectId.isValid(orgId)) {
+      return res.status(400).json({ message: 'Invalid organization ID' })
+    }
+
     const orgExists = await Organization.findById(orgId)
     if (!orgExists) return res.status(404).json({ message: 'Organization not found' })
 
@@ -20,6 +28,7 @@ const signup = async (req, res) => {
     const user = await User.create({ email, password, orgId, role: 'org_admin' })
     res.status(201).json({ message: 'Admin registered successfully', userId: user._id })
   } catch (error) {
+    console.error('Signup error:', error.message) // ADD THIS
     res.status(500).json({ message: 'Server error', error: error.message })
   }
 }
@@ -27,11 +36,17 @@ const signup = async (req, res) => {
 const login = async (req, res) => {
   const { email, password } = req.body
 
+  console.log('login body:', req.body) // check terminal
+
   try {
     const user = await User.findOne({ email }).populate('orgId', 'name')
+    console.log('user found:', user) // check terminal
+
     if (!user) return res.status(401).json({ message: 'Invalid credentials' })
 
     const isMatch = await user.matchPassword(password)
+    console.log('password match:', isMatch) // check terminal
+
     if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' })
 
     const token = jwt.sign(
@@ -48,6 +63,7 @@ const login = async (req, res) => {
       orgName: user.orgId.name,
     })
   } catch (error) {
+    console.error('Login error:', error.message)
     res.status(500).json({ message: 'Server error', error: error.message })
   }
 }

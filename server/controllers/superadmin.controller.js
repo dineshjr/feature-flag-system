@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken')
-const Organization = require('../models/Organization')
+const Organization = require('../models/Organizations')
 const SUPER_ADMIN = require('../config/superadmin')
 
 const login = (req, res) => {

@@ -1,31 +1,50 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router'
-
-const MOCK_ORGS = [
-  { _id: '1', name: 'Acme Corp' },
-  { _id: '2', name: 'Stark Industries' },
-  { _id: '3', name: 'Wayne Enterprises' },
-]
+import axios from 'axios'
 
 export default function Signup() {
   const navigate = useNavigate()
+  const [orgs, setOrgs] = useState([])
   const [form, setForm] = useState({ email: '', password: '', orgId: '' })
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    setError('')
-    setSuccess('')
-
-    if (!form.email || !form.password || !form.orgId) {
-      return setError('All fields are required')
+useEffect(() => {
+  const fetchOrgs = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/user/organizations')
+      console.log('orgs response:', res.data)
+      setOrgs(Array.isArray(res.data) ? res.data : [])
+    } catch (err) {
+      console.error('org fetch error:', err)
+      setError('Failed to load organizations')
+      setOrgs([])
     }
+  }
+  fetchOrgs()
+}, [])
 
-    // Mock signup — just redirect to login
+const handleSubmit = async (e) => {
+  e.preventDefault()
+  setError('')
+  setSuccess('')
+
+  if (!form.email || !form.password || !form.orgId) {
+    return setError('All fields are required')
+  }
+
+  setLoading(true)
+  try {
+    await axios.post('http://localhost:5000/api/admin/signup', form)
     setSuccess('Account created! Redirecting to login...')
     setTimeout(() => navigate('/'), 1500)
+  } catch (err) {
+    setError(err.response?.data?.message || 'Signup failed')
+  } finally {
+    setLoading(false)
   }
+}
 
   return (
     <div style={styles.container}>
@@ -65,12 +84,14 @@ export default function Signup() {
             required
           >
             <option value="">-- Select Organization --</option>
-            {MOCK_ORGS.map((org) => (
+            {orgs.map((org) => (
               <option key={org._id} value={org._id}>{org.name}</option>
             ))}
           </select>
 
-          <button type="submit" style={styles.button}>Sign Up</button>
+          <button type="submit" style={styles.button} disabled={loading}>
+            {loading ? 'Creating account...' : 'Sign Up'}
+          </button>
         </form>
 
         <p style={styles.link}>
